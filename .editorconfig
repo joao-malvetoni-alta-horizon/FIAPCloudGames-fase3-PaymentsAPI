@@ -1,0 +1,15 @@
+root = true
+
+[*.cs]
+
+# Preferir construtor primário em vez de construtor convencional (IDE0290)
+csharp_style_prefer_primary_constructors = true:warning
+dotnet_diagnostic.IDE0290.severity = warning
+
+# Remover usings desnecessários (IDE0005)
+dotnet_diagnostic.IDE0005.severity = warning
+
+# Migrations são geradas pelo EF Core — não aplicar regras de estilo nelas.
+[**/Migrations/*.cs]
+dotnet_diagnostic.IDE0005.severity = none
+dotnet_diagnostic.IDE0290.severity = none

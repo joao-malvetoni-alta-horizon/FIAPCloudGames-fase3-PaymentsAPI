@@ -1,0 +1,17 @@
+<Project>
+
+    <PropertyGroup>
+        <!-- Faz as regras de estilo (prefixo IDE*, ex.: IDE0005/IDE0290) rodarem no
+             build/CI, não só no editor. -->
+        <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+        <!-- Necessário especificamente para o IDE0005 (using desnecessário) rodar no build. -->
+        <GenerateDocumentationFile>true</GenerateDocumentationFile>
+        <!-- Evita o flood de CS1591 (membro público sem comentário XML) que vem junto
+             ao habilitar o GenerateDocumentationFile. -->
+        <NoWarn>$(NoWarn);CS1591</NoWarn>
+        <!-- Warnings (CS* e IDE*) quebram o build/CI. Não afeta warnings do MSBuild
+             (ex.: MSB3277), só os do compilador/analisadores. -->
+        <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    </PropertyGroup>
+
+</Project>

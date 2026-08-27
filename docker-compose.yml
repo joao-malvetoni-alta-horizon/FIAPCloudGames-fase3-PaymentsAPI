@@ -1,0 +1,56 @@
+# Sobe o PaymentsAPI completo (API + PostgreSQL + RabbitMQ) para executar o serviço isolado
+# com `docker compose up`. Os nomes dos serviços (db, rabbitmq) batem com os hosts do
+# appsettings.json, então a API os alcança dentro da rede do compose.
+#
+# Observação: este RabbitMQ é local a este repositório. Para rodar o fluxo completo entre os
+# microsserviços (Catalog -> Payments -> Notifications) use o repositório de orquestração, onde
+# todos compartilham o mesmo broker.
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: fcg_payments
+      POSTGRES_USER: fcg
+      POSTGRES_PASSWORD: fcg123
+    ports:
+      - "5432:5432" # exposto no host para desenvolvimento local (dotnet run)
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fcg -d fcg_payments"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: fcg
+      RABBITMQ_DEFAULT_PASS: fcg123
+    ports:
+      - "5672:5672"   # AMQP
+      - "15672:15672" # painel de gerenciamento (http://localhost:15672)
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  payments-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__DefaultConnection: "Host=db;Port=5432;Database=fcg_payments;Username=fcg;Password=fcg123"
+      RabbitMq__Host: rabbitmq
+    ports:
+      - "8080:8080"
+
+volumes:
+  pgdata:

@@ -1,0 +1,12 @@
+# Evita enviar artefatos de build e metadados de IDE para o contexto do Docker.
+**/bin/
+**/obj/
+**/.vs/
+**/.idea/
+.git/
+.github/
+tests/
+docker-compose.yml
+*.user
+*.md
+**/node_modules/
