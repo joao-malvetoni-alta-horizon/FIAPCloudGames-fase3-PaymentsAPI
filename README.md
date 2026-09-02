@@ -53,6 +53,7 @@ para aguardar o banco ficar pronto (útil em `docker-compose`/Kubernetes).
 - RabbitMQ via pacote NuGet `FiapCloudGames.RabbitMq` (publisher + consumidor genérico)
 - Contratos de eventos compartilhados via pacote NuGet `FiapCloudGames.Contracts`
 - Serilog (logs estruturados)
+- New Relic (APM: métricas, logs e traces) via pacote NuGet `NewRelic.Agent`
 - Testes: xUnit + Shouldly + NSubstitute
 
 ## Estrutura
@@ -80,6 +81,95 @@ docker-compose.yml     # API + PostgreSQL + RabbitMQ para rodar o serviço isola
 | `RabbitMq__Password` | Senha do RabbitMQ | `fcg123` |
 | `RabbitMq__VirtualHost` | Virtual host do RabbitMQ | `/` |
 | `ASPNETCORE_ENVIRONMENT` | Ambiente (`Development`/`Production`) | `Development` |
+| `NEW_RELIC_LICENSE_KEY` | License key (ingest) da conta New Relic. **Segredo** — vem de Kubernetes Secret ou do `.env` local, nunca do código | `eu01xx...NRAL` |
+| `NEW_RELIC_APP_NAME` | Nome da aplicação no New Relic (já definido nos Dockerfiles) | `FCG-PaymentsAPI` |
+
+> As demais variáveis do agente (`CORECLR_*`, `NEW_RELIC_DISTRIBUTED_TRACING_ENABLED`,
+> `NEW_RELIC_APPLICATION_LOGGING_*`, `NEW_RELIC_LOG_*`) já vêm prontas nos Dockerfiles —
+> ver "Observabilidade" abaixo.
+
+## Observabilidade (New Relic)
+
+A plataforma de observabilidade escolhida para a Fase 3 é o **New Relic** (opção B: APM
+gerenciado). O agente vem do pacote NuGet `NewRelic.Agent`, que publica o agente e o profiler
+em `./newrelic` junto com a aplicação; os dois Dockerfiles do repositório já definem as
+variáveis `CORECLR_*` que fazem o CoreCLR carregar o profiler, então **a imagem sobe
+instrumentada sem nenhuma mudança em `Program.cs`**. Sem `NEW_RELIC_LICENSE_KEY` a API roda
+normalmente — o agente apenas não conecta.
+
+### Os três pilares
+
+| Pilar | Como é atendido |
+|-------|-----------------|
+| **Métricas** | Automáticas do agente APM: latência, throughput e taxa de erro por transação (endpoints REST e o consumo da fila). O dashboard é montado na UI do New Relic. |
+| **Logs** | `NEW_RELIC_APPLICATION_LOGGING_FORWARDING_ENABLED=true` faz o agente encaminhar os logs do Serilog (que o agente instrumenta sozinho) para o New Relic, e `..._LOCAL_DECORATING_ENABLED=true` injeta os identificadores de trace em cada linha, ligando log ↔ trace. Nenhum sink HTTP foi adicionado. |
+| **Traces** | Distributed tracing ligado (`NEW_RELIC_DISTRIBUTED_TRACING_ENABLED=true`). O consumo do `OrderPlacedEvent` é marcado com `[Transaction]` e anotado com os atributos `fcg.orderEventId`, `fcg.userId` e `fcg.gameId` (só GUIDs, nada de dado pessoal). **Limitação conhecida** — ver abaixo. |
+
+### Limitação: o trace não atravessa o RabbitMQ
+
+O agente .NET 10.54 instrumenta o `RabbitMQ.Client` apenas até a versão **6.8.1**
+(`maxVersion="6.8.1"` em `NewRelic.Providers.Wrapper.RabbitMq.Instrumentation.xml`, e o
+matcher de consumo é o `EventingBasicConsumer`). Este serviço resolve
+**`RabbitMQ.Client` 7.2.1** (transitivo de `FiapCloudGames.RabbitMq` 1.0.0), que usa o
+`AsyncEventingBasicConsumer`. Consequência prática:
+
+- o agente **não** injeta nem lê os headers de distributed tracing nas mensagens, então o
+  trace do fluxo de "Compra de Jogo" **quebra na fila**: aparece um trace no `FCG-CatalogAPI`
+  (a requisição HTTP de compra) e outro, separado, no `FCG-PaymentsAPI` (o processamento da
+  mensagem);
+- os dois lados continuam sendo correlacionáveis pelos atributos customizados
+  (`fcg.orderEventId`, `fcg.userId`, `fcg.gameId`) e pelos logs;
+- o `[Transaction]` no `OrderPlacedMessageProcessor` existe justamente porque, sem
+  instrumentação da fila, o processamento do pagamento não geraria transação nenhuma — sem
+  ele não haveria métrica nem trace do consumo.
+
+Optou-se por **não** reescrever o wrapper de mensageria (`FiapCloudGames.RabbitMq`, pacote
+externo) para propagar os headers manualmente: seria mudança de infraestrutura de negócio,
+fora do escopo deste trabalho de observabilidade.
+
+### Configurar a license key no Kubernetes (requisito do desafio)
+
+A chave é uma credencial e por isso vive num **Secret**, nunca em ConfigMap ou no código.
+O `k8s/deployment.yaml` a consome do Secret `fcg-secrets`, chave `NewRelic__LicenseKey`:
+
+```bash
+kubectl -n fcg create secret generic fcg-secrets \
+  --from-literal=NewRelic__LicenseKey=<sua-license-key> \
+  --from-literal=RabbitMq__Password=<senha-do-rabbitmq> \
+  --dry-run=client -o yaml | kubectl apply -f -
+```
+
+### Rodar localmente com o agente
+
+Com `docker compose`, a chave vem do ambiente do host (ou de um arquivo `.env`, que está no
+`.gitignore` — copie o `.env.example`):
+
+```bash
+cp .env.example .env      # e preencha NEW_RELIC_LICENSE_KEY
+docker compose up --build
+```
+
+Rodando com `dotnet run` o agente **não** é carregado (o profiler depende das variáveis
+`CORECLR_*` definidas no Dockerfile). Para instrumentar também nesse cenário, exporte antes:
+
+```bash
+export CORECLR_ENABLE_PROFILING=1
+export CORECLR_PROFILER='{36032161-FFC0-4B61-B559-F6C5D41BAE5A}'
+export CORECLR_NEWRELIC_HOME="$PWD/src/FCG.API/bin/Debug/net10.0/newrelic"
+export CORECLR_PROFILER_PATH="$CORECLR_NEWRELIC_HOME/libNewRelicProfiler.so"
+export NEW_RELIC_APP_NAME=FCG-PaymentsAPI
+export NEW_RELIC_LICENSE_KEY=<sua-license-key>
+dotnet run --project src/FCG.API
+```
+
+### Log do próprio agente e usuário não-root
+
+A imagem da raiz roda como usuário não-root (`USER $APP_UID`) e o agente escreve o próprio
+log em disco — no diretório padrão (`/app/newrelic/logs`, que pertence ao root) isso falharia.
+Por isso os Dockerfiles apontam `NEW_RELIC_LOG_DIRECTORY` e `NEW_RELIC_PROFILER_LOG_DIRECTORY`
+para `/tmp/newrelic` (criado com permissão `1777`, portanto escrito por qualquer UID, inclusive
+se o Kubernetes forçar um `runAsUser` diferente) e ligam `NEW_RELIC_LOG_CONSOLE=true`, para o
+log do agente também sair no stdout do container, onde Docker/Kubernetes já coletam.
 
 ## Executar com Docker (serviço isolado)
 
