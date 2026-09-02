@@ -38,3 +38,7 @@ coverage/
 # OS
 .DS_Store
 Thumbs.db
+
+# Variáveis locais (contém a license key do New Relic) — ver .env.example
+.env
+.env.local

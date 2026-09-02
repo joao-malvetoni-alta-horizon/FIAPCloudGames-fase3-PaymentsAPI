@@ -49,6 +49,9 @@ services:
       ASPNETCORE_URLS: http://+:8080
       ConnectionStrings__DefaultConnection: "Host=db;Port=5432;Database=fcg_payments;Username=fcg;Password=fcg123"
       RabbitMq__Host: rabbitmq
+      # Agente APM do New Relic: a chave vem do ambiente do host (ou do arquivo .env, ver
+      # .env.example). Vazia por padrão — sem ela a API sobe normalmente, só não reporta.
+      NEW_RELIC_LICENSE_KEY: ${NEW_RELIC_LICENSE_KEY:-}
     ports:
       - "8080:8080"
 

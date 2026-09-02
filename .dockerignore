@@ -7,6 +7,8 @@
 .github/
 tests/
 docker-compose.yml
+.env
+.env.local
 *.user
 *.md
 **/node_modules/

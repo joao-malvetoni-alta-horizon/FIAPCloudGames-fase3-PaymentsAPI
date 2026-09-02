@@ -31,6 +31,10 @@ spec:
               valueFrom: { configMapKeyRef: { name: fcg-config, key: RabbitMq__VirtualHost } }
             - name: RabbitMq__Password
               valueFrom: { secretKeyRef: { name: fcg-secrets, key: RabbitMq__Password } }
+            # Observabilidade (New Relic). A license key é uma chave de API: vem de Secret,
+            # nunca de ConfigMap. As demais variáveis do agente já vêm do Dockerfile.
+            - name: NEW_RELIC_LICENSE_KEY
+              valueFrom: { secretKeyRef: { name: fcg-secrets, key: NewRelic__LicenseKey } }
           # Pagamentos expõe /health: sonda HTTP.
           livenessProbe:
             httpGet: { path: /health, port: 8080 }
