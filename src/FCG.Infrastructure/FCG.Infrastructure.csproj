@@ -12,6 +12,9 @@
             <PrivateAssets>all</PrivateAssets>
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
         </PackageReference>
+        <!-- Só a API do agente (atributos customizados/[Transaction]); o agente em si é
+             referenciado pela FCG.API. Sem o agente carregado, as chamadas viram no-op. -->
+        <PackageReference Include="NewRelic.Agent.Api" Version="10.54.0"/>
         <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.1"/>
     </ItemGroup>
 

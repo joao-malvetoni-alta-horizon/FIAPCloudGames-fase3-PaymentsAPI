@@ -11,6 +11,10 @@
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
             <PrivateAssets>all</PrivateAssets>
         </PackageReference>
+        <!-- Agente APM do New Relic: publica o profiler CLR e o agente em ./newrelic no
+             output do publish. A instrumentação é ativada pelas variáveis CORECLR_* do
+             Dockerfile; sem NEW_RELIC_LICENSE_KEY o agente simplesmente não conecta. -->
+        <PackageReference Include="NewRelic.Agent" Version="10.54.0"/>
         <PackageReference Include="Serilog.AspNetCore" Version="9.*"/>
     </ItemGroup>
 
