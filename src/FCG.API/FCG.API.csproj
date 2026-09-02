@@ -11,12 +11,13 @@
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
             <PrivateAssets>all</PrivateAssets>
         </PackageReference>
-        <PackageReference Include="Serilog.AspNetCore" Version="9.*"/>
+        <PackageReference Include="NewRelic.Agent" Version="10.54.0" />
+        <PackageReference Include="Serilog.AspNetCore" Version="9.*" />
     </ItemGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\FCG.Application\FCG.Application.csproj"/>
-        <ProjectReference Include="..\FCG.Infrastructure\FCG.Infrastructure.csproj"/>
+        <ProjectReference Include="..\FCG.Application\FCG.Application.csproj" />
+        <ProjectReference Include="..\FCG.Infrastructure\FCG.Infrastructure.csproj" />
     </ItemGroup>
 
 </Project>
