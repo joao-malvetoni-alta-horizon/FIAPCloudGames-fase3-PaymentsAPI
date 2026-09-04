@@ -18,7 +18,9 @@ spec:
           ports:
             - containerPort: 8080
           env:
-            # Pagamentos não usa banco nem JWT: apenas RabbitMQ.
+            # PaymentProcessedEvent vai em dois transportes: RabbitMQ (de volta pro
+            # CatalogAPI, que adiciona o jogo à biblioteca) e SNS (para a Lambda do
+            # NotificationsAPI, que envia o email de confirmação).
             - name: ASPNETCORE_ENVIRONMENT
               valueFrom: { configMapKeyRef: { name: fcg-config, key: ASPNETCORE_ENVIRONMENT } }
             - name: RabbitMq__Host
@@ -31,6 +33,15 @@ spec:
               valueFrom: { configMapKeyRef: { name: fcg-config, key: RabbitMq__VirtualHost } }
             - name: RabbitMq__Password
               valueFrom: { secretKeyRef: { name: fcg-secrets, key: RabbitMq__Password } }
+            # SNS: para PUBLICAR o PaymentProcessedEvent (consumido pela Lambda do NotificationsAPI).
+            - name: Sns__TopicArn
+              valueFrom: { configMapKeyRef: { name: fcg-config, key: Sns__PaymentEventsTopicArn } }
+            - name: AWS_REGION
+              valueFrom: { configMapKeyRef: { name: fcg-config, key: AWS_REGION } }
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom: { secretKeyRef: { name: fcg-secrets, key: AWS_ACCESS_KEY_ID } }
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom: { secretKeyRef: { name: fcg-secrets, key: AWS_SECRET_ACCESS_KEY } }
           # Pagamentos expõe /health: sonda HTTP.
           livenessProbe:
             httpGet: { path: /health, port: 8080 }

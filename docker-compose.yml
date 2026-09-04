@@ -2,6 +2,12 @@
 # com `docker compose up`. Os nomes dos serviços (db, rabbitmq) batem com os hosts do
 # appsettings.json, então a API os alcança dentro da rede do compose.
 #
+# PaymentProcessedEvent é publicado em DOIS transportes: RabbitMQ (consumido pelo
+# CatalogAPI, que adiciona o jogo à biblioteca) e SNS (consumido pela Lambda do
+# NotificationsAPI, que envia o email). SNS exige credenciais AWS reais no ambiente
+# (AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY/AWS_REGION); sem elas, só essa publicação
+# falha silenciosamente (log de warning) — o RabbitMQ continua funcionando normalmente.
+#
 # Observação: este RabbitMQ é local a este repositório. Para rodar o fluxo completo entre os
 # microsserviços (Catalog -> Payments -> Notifications) use o repositório de orquestração, onde
 # todos compartilham o mesmo broker.
@@ -49,6 +55,10 @@ services:
       ASPNETCORE_URLS: http://+:8080
       ConnectionStrings__DefaultConnection: "Host=db;Port=5432;Database=fcg_payments;Username=fcg;Password=fcg123"
       RabbitMq__Host: rabbitmq
+      Sns__TopicArn: ${SNS_PAYMENT_EVENTS_TOPIC_ARN:-arn:aws:sns:us-east-1:450753703903:fcg-payment-events}
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
     ports:
       - "8080:8080"
 

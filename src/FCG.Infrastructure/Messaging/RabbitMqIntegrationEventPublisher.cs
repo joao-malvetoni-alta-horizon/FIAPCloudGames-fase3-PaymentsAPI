@@ -11,6 +11,10 @@ namespace FCG.Infrastructure.Messaging;
 /// Adapta o IRabbitMqPublisher (pacote FiapCloudGames.RabbitMq) para o contrato
 /// IIntegrationEventPublisher da camada de Application. A rota (exchange/routing key)
 /// é resolvida a partir do atributo [IntegrationEventRoute] do próprio evento.
+///
+/// Usado só para PUBLICAR PaymentProcessedEvent de volta pro CatalogAPI (que adiciona o
+/// jogo à biblioteca) — ver CompositeIntegrationEventPublisher. Não confundir com o
+/// consumo do OrderPlacedEvent (OrderPlacedMessageProcessor), que é outro fluxo.
 /// </summary>
 public sealed class RabbitMqIntegrationEventPublisher(
     IRabbitMqPublisher publisher,

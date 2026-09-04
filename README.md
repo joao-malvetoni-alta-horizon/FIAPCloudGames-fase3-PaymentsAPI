@@ -17,10 +17,17 @@ e para **disparar manualmente** um pagamento (útil em demonstração/teste).
 3. Caso contrário, simula a decisão do pagamento (`IPaymentApprovalPolicy` — hoje
    `RandomApprovalPolicy`, que aprova ~90% das tentativas; a Fase 2 não integra com um gateway
    de pagamento real) e persiste o resultado.
-4. Publica `PaymentProcessedEvent` (`UserId`, `GameId`, `Status`) na exchange
-   `payments.exchange`, routing key `payment.status`, consumido pelo `CatalogAPI` (adiciona o
-   jogo à biblioteca se `Approved`) e pelo `NotificationsAPI` (envia email de confirmação se
-   `Approved`).
+4. Publica `PaymentProcessedEvent` (`UserId`, `GameId`, `Status`) em **dois transportes**,
+   pois há dois consumidores independentes:
+   - **RabbitMQ** (exchange `payments.exchange`, routing key `payment.status`) — consumido
+     pelo `CatalogAPI`, que adiciona o jogo à biblioteca se `Approved`;
+   - **SNS** (tópico `fcg-payment-events`) — consumido pela função Lambda do
+     `NotificationsAPI` (via SQS), que envia o email de confirmação se `Approved`.
+
+   `NotificationsAPI` é serverless (Fase 3): não existe mais como container consumindo do
+   RabbitMQ, por isso a publicação para ele precisou migrar para SNS. O `CompositeIntegrationEventPublisher`
+   (`FCG.Infrastructure/Messaging`) publica nos dois ao mesmo tempo; uma falha em um
+   transporte não impede a publicação no outro (cada um loga e segue, sem padrão Outbox).
 
 ## API REST
 
@@ -50,7 +57,8 @@ para aguardar o banco ficar pronto (útil em `docker-compose`/Kubernetes).
 
 - .NET 10 — Minimal API (health check) + Controllers (API REST de pagamentos)
 - EF Core + Npgsql (PostgreSQL) para persistência dos pagamentos processados
-- RabbitMQ via pacote NuGet `FiapCloudGames.RabbitMq` (publisher + consumidor genérico)
+- RabbitMQ via pacote NuGet `FiapCloudGames.RabbitMq` (consome `OrderPlacedEvent`; publica `PaymentProcessedEvent` de volta pro CatalogAPI)
+- AWS SNS (`AWSSDK.SimpleNotificationService`) — publica `PaymentProcessedEvent` para a Lambda do NotificationsAPI
 - Contratos de eventos compartilhados via pacote NuGet `FiapCloudGames.Contracts`
 - Serilog (logs estruturados)
 - Testes: xUnit + Shouldly + NSubstitute
@@ -61,7 +69,7 @@ para aguardar o banco ficar pronto (útil em `docker-compose`/Kubernetes).
 src/
   FCG.Domain          # Payment (entidade), IPaymentApprovalPolicy (regra da simulação)
   FCG.Application     # Caso de uso: processa OrderPlacedEvent, publica PaymentProcessedEvent
-  FCG.Infrastructure  # EF Core (AppDbContext, repositório, migrations) + RabbitMq
+  FCG.Infrastructure  # EF Core (AppDbContext, repositório, migrations) + RabbitMq + SNS
   FCG.API             # Composição, health check, API REST e migração do banco na subida
 tests/
   FCG.UnitTests        # xUnit + Shouldly + NSubstitute
@@ -79,6 +87,8 @@ docker-compose.yml     # API + PostgreSQL + RabbitMQ para rodar o serviço isola
 | `RabbitMq__Username` | Usuário do RabbitMQ | `fcg` |
 | `RabbitMq__Password` | Senha do RabbitMQ | `fcg123` |
 | `RabbitMq__VirtualHost` | Virtual host do RabbitMQ | `/` |
+| `Sns__TopicArn` | ARN do tópico SNS onde o `PaymentProcessedEvent` também é publicado | `arn:aws:sns:us-east-1:450753703903:fcg-payment-events` |
+| `AWS_REGION` / `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | Credenciais AWS para publicar no SNS (padrão do SDK; sem elas a publicação SNS falha silenciosamente, mas o RabbitMQ continua funcionando normalmente) | — |
 | `ASPNETCORE_ENVIRONMENT` | Ambiente (`Development`/`Production`) | `Development` |
 
 ## Executar com Docker (serviço isolado)
