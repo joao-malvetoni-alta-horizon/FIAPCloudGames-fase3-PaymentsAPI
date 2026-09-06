@@ -1,4 +1,5 @@
 using FCG.Application.Payments.Interfaces;
+using FCG.Application.Shared.Cache;
 using FCG.Domain.Payments.Interfaces;
 using FiapCloudGames.Contracts.Catalog;
 using Microsoft.AspNetCore.Mvc;
@@ -14,7 +15,8 @@ namespace FCG.API.Controllers;
 [Route("payments")]
 public sealed class PaymentsController(
     IProcessOrderPlacedUseCase processOrderPlaced,
-    IPaymentRepository payments) : ControllerBase
+    IPaymentRepository payments,
+    ICacheService cacheService) : ControllerBase
 {
     /// <summary>
     /// Simula um pedido de compra (equivalente a um <c>OrderPlacedEvent</c>), processa o
@@ -42,7 +44,23 @@ public sealed class PaymentsController(
     [HttpGet]
     public async Task<ActionResult<IReadOnlyList<PaymentResponse>>> GetAll(CancellationToken cancellationToken)
     {
-        var all = await payments.GetAllAsync(cancellationToken);
+        var cacheKey = "payments:all";
+
+        var all = await cacheService.GetOrSetAsync(
+            cacheKey,
+            async () =>
+            {
+                return await payments.GetAllAsync(cancellationToken);
+            },
+            TimeSpan.FromMinutes(3),
+            cancellationToken
+        );
+
+        if (all is null)
+        {
+            return NotFound();
+        }
+
         return Ok(all.Select(PaymentResponse.From).ToList());
     }
 
@@ -50,25 +68,47 @@ public sealed class PaymentsController(
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<PaymentResponse>> GetById(Guid id, CancellationToken cancellationToken)
     {
-        var payment = await payments.GetByIdAsync(id, cancellationToken);
+        var cacheKey = $"payment:{id}";
+
+        var payment = await cacheService.GetOrSetAsync(
+            cacheKey,
+            async () =>
+            {
+                return await payments.GetByIdAsync(id, cancellationToken);
+            },
+            TimeSpan.FromMinutes(1),
+            cancellationToken
+        );
+
         if (payment is null)
         {
             return NotFound();
         }
 
-        return Ok(PaymentResponse.From(payment));
+        return Ok(PaymentResponse.From(payment!));
     }
 
     /// <summary>Busca o pagamento correspondente ao <c>EventId</c> do <c>OrderPlacedEvent</c> de origem.</summary>
     [HttpGet("by-event/{eventId:guid}")]
     public async Task<ActionResult<PaymentResponse>> GetByEventId(Guid eventId, CancellationToken cancellationToken)
     {
-        var payment = await payments.GetByEventIdAsync(eventId, cancellationToken);
+        var cacheKey = $"payment-by-event:{eventId}";
+
+        var payment = await cacheService.GetOrSetAsync(
+            cacheKey,
+            async () =>
+            {
+                return await payments.GetByEventIdAsync(eventId, cancellationToken);
+            },
+            TimeSpan.FromMinutes(1),
+            cancellationToken
+        );
+
         if (payment is null)
         {
             return NotFound();
         }
 
-        return Ok(PaymentResponse.From(payment));
+        return Ok(PaymentResponse.From(payment!));
     }
 }
