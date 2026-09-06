@@ -7,6 +7,7 @@
 
     <ItemGroup>
         <PackageReference Include="FiapCloudGames.RabbitMq" Version="1.0.0"/>
+        <PackageReference Include="AWSSDK.SimpleNotificationService" Version="4.0.100.11"/>
         <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.*"/>
         <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.5">
             <PrivateAssets>all</PrivateAssets>
