@@ -1,7 +1,10 @@
+using Amazon;
 using Amazon.SimpleNotificationService;
 using FCG.Application.Messaging;
+using FCG.Application.Shared.Cache;
 using FCG.Domain.Payments;
 using FCG.Domain.Payments.Interfaces;
+using FCG.Infrastructure.Cache;
 using FCG.Infrastructure.Messaging;
 using FCG.Infrastructure.Persistence;
 using FCG.Infrastructure.Persistence.Context;
@@ -13,6 +16,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using StackExchange.Redis;
 
 namespace FCG.Infrastructure.DependencyInjection;
 
@@ -27,7 +31,8 @@ public static class InfrastructureServiceExtension
                 .AddRepositories()
                 .AddUnitOfWork()
                 .AddDomainServices()
-                .AddMessaging(configuration);
+                .AddMessaging(configuration)
+                .AddRedis(configuration);
         }
 
         private IServiceCollection ConfigureDb(IConfiguration configuration)
@@ -71,7 +76,7 @@ public static class InfrastructureServiceExtension
                 // ServiceUrl só vem preenchido em teste (ex.: LocalStack). Em produção o
                 // SDK resolve o endpoint real da AWS a partir da região (AWS_REGION).
                 if (string.IsNullOrWhiteSpace(options.ServiceUrl))
-                    return new AmazonSimpleNotificationServiceClient();
+                    return new AmazonSimpleNotificationServiceClient(RegionEndpoint.USEast1);
 
                 return new AmazonSimpleNotificationServiceClient(
                     new AmazonSimpleNotificationServiceConfig { ServiceURL = options.ServiceUrl });
@@ -87,6 +92,16 @@ public static class InfrastructureServiceExtension
                     CatalogMessaging.Exchange,
                     "payments.order-placed",
                     CatalogMessaging.RoutingKeys.OrderPlaced));
+        }
+
+        private IServiceCollection AddRedis(IConfiguration configuration)
+        {
+            services.AddSingleton<IConnectionMultiplexer>(sp =>
+                ConnectionMultiplexer.Connect(configuration.GetConnectionString("Redis")??""));
+
+            services.AddSingleton<ICacheService, RedisCacheService>();
+
+            return services;
         }
     }
 }

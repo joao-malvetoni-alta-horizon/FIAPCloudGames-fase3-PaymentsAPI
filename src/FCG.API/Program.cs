@@ -11,10 +11,14 @@ builder.AddSerilogConfig();
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddControllers();
+builder.Services.AddSwaggerConfig();
 
 var app = builder.Build();
 
 app.UseSerilogRequestLogging();
+
+if (app.Environment.IsDevelopment())
+    app.UseSwaggerConfig();
 
 app.MapHealthCheck();
 app.MapControllers();

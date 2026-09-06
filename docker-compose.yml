@@ -42,6 +42,23 @@ services:
       timeout: 5s
       retries: 10
 
+  redis:
+    image: redis:7-alpine
+    container_name: paymentsredis
+    command: >
+      redis-server
+      --user default off
+      --user payments on ">pass" "~*" "&*" "+@all"
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "--user", "catalog", "--pass", "pass", "--no-auth-warning", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   payments-api:
     build:
       context: .
@@ -50,6 +67,8 @@ services:
       db:
         condition: service_healthy
       rabbitmq:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     environment:
       ASPNETCORE_URLS: http://+:8080
@@ -64,3 +83,4 @@ services:
 
 volumes:
   pgdata:
+  redis_data:
