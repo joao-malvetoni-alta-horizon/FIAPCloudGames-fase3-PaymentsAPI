@@ -6,15 +6,21 @@
     </ItemGroup>
 
     <ItemGroup>
-        <PackageReference Include="FiapCloudGames.RabbitMq" Version="1.0.0" />
+        <PackageReference Include="FiapCloudGames.RabbitMq" Version="1.1.0" />
         <PackageReference Include="AWSSDK.SimpleNotificationService" Version="4.0.100.11" />
         <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.*" />
         <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.5">
             <PrivateAssets>all</PrivateAssets>
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
         </PackageReference>
+        <PackageReference Include="NewRelic.Agent.Api" Version="10.54.0" />
         <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.1" />
         <PackageReference Include="StackExchange.Redis" Version="3.1.31" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <!-- Expõe os helpers internos de propagação de trace para os testes de unidade. -->
+        <InternalsVisibleTo Include="FCG.UnitTests" />
     </ItemGroup>
 
     <PropertyGroup>
