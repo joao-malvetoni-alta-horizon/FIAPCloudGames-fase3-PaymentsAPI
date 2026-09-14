@@ -36,7 +36,12 @@ public sealed class RabbitMqIntegrationEventPublisher(
 
         try
         {
-            await publisher.PublishAsync(exchange, routingKey, integrationEvent, cancellationToken);
+            // Este publish acontece dentro da transação aberta pelo OrderPlacedMessageProcessor,
+            // então o contexto injetado aqui continua o mesmo trace que veio do catalog-api — é
+            // isso que fecha o circuito do trace distribuído do fluxo de Compra de Jogo.
+            Dictionary<string, object?> headers = CaptureDistributedTraceHeaders();
+
+            await publisher.PublishAsync(exchange, routingKey, integrationEvent, headers, cancellationToken);
         }
         catch (Exception ex)
         {
@@ -49,6 +54,24 @@ public sealed class RabbitMqIntegrationEventPublisher(
                 integrationEvent.GetType().Name,
                 integrationEvent.EventId);
         }
+    }
+
+    /// <summary>
+    /// Monta os headers de trace distribuído (<c>traceparent</c>, <c>tracestate</c> e
+    /// <c>newrelic</c>) para acompanharem a mensagem.
+    /// </summary>
+    /// <remarks>
+    /// Sem transação ativa (ou sem agente anexado) o New Relic devolve um <c>NoOpTransaction</c>
+    /// e o dicionário volta vazio: a publicação segue normal, apenas sem header. Isso não é erro.
+    /// </remarks>
+    internal static Dictionary<string, object?> CaptureDistributedTraceHeaders()
+    {
+        var headers = new Dictionary<string, object?>();
+
+        NewRelic.Api.Agent.NewRelic.GetAgent().CurrentTransaction
+            .InsertDistributedTraceHeaders(headers, static (carrier, key, value) => carrier[key] = value);
+
+        return headers;
     }
 
     private static (string Exchange, string RoutingKey) ResolveRoute(Type eventType) =>
